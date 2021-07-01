@@ -18,37 +18,22 @@ class CoarseLoss():
         """
         origLandmarks=torch.squeeze(origLandmarks)
         predictedLandmarks=torch.squeeze(predictedLandmarks)
-        # loss=0
-        # loss = self.criterion(origLandmarks,predictedLandmarks)
-        
-        # for i in range(68):
-        #     d = 0
-        #     d += ((origLandmarks[i][0]-predictedLandmarks[i][0])**2)
-        #     d += ((origLandmarks[i][1]-predictedLandmarks[i][1])**2)
-        #     d = d**0.5
-        #     loss+=d
-
-        # print('------------------------------Landmarks----------------------------------')
-        # print(origLandmarks.shape)
-        # print(origLandmarks)
-        # print(predictedLandmarks.shape)
-        # print(predictedLandmarks)
         loss = origLandmarks-predictedLandmarks
-        print('-----------------After taking difference----------------------')
-        print(loss)
+        # print('-----------------After taking difference----------------------')
+        # print(loss)
         loss = torch.square(loss)
-        print('---------------After squaring------------------')
-        print(loss)
+        # print('---------------After squaring------------------')
+        # print(loss)
         loss = torch.sum(loss,dim=1)
-        print('---------------After Summing------------------')
-        print(loss)
+        # print('---------------After Summing------------------')
+        # print(loss)
         loss = torch.sqrt(loss)
-        print('---------------After Square Rooting------------------')
-        print(loss)
+        # print('---------------After Square Rooting------------------')
+        # print(loss)
         loss = torch.sum(loss)
-        print('---------------After Summing All Distances------------------')
-        print(loss)
-        loss = torch.squeeze(loss)
+        # print('---------------After Summing All Distances------------------')
+        # print(loss)
+        loss = torch.squeeze(loss)/68
 
         # loss = torch.squeeze(torch.sum(torch.sqrt(torch.sum(torch.square(origLandmarks-predictedLandmarks),dim=1))))
         # print("Landmarks loss ", loss)
@@ -92,12 +77,8 @@ class CoarseLoss():
         flameDiff = torch.sqrt((grndEye[2]-grndEye[0])**2 + (grndEye[3]-grndEye[1])
                                ** 2 + (grndEye[6]-grndEye[4])**2 + (grndEye[7]-grndEye[5])**2)
 
-        # print(origDiff.shape)
-        # print(flameDiff.shape)
-
-        totalDiff = torch.squeeze(
-            torch.sum(origDiff-flameDiff)).to(device=self.device)
-        # print("Eye loss ", totalDiff)
+        totalDiff = torch.abs(torch.squeeze(
+            torch.sum(origDiff-flameDiff))).to(device=self.device)
         return totalDiff
 
     def photometricLoss(self, image, renderedImage, mask):

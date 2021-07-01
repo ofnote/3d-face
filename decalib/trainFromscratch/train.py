@@ -22,10 +22,29 @@ from skimage.transform import warp, estimate_transform
 from pytorch_lightning.callbacks import ModelCheckpoint
 import torch.optim as optim
 import cv2
+import re
+
+from torch._six import container_abcs, string_classes, int_classes
+
 from ..datasets import detectors
 # It is used whenever the size of the inputs is same
 torch.backends.cudnn.benchmark = True
 
+_use_shared_memory=False
+np_str_obj_array_pattern = re.compile(r'[SaUO]')
+ 
+error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
+ 
+numpy_type_map = {
+    'float64': torch.DoubleTensor,
+    'float32': torch.FloatTensor,
+    'float16': torch.HalfTensor,
+    'int64': torch.LongTensor,
+    'int32': torch.IntTensor,
+    'int16': torch.ShortTensor,
+    'int8': torch.CharTensor,
+    'uint8': torch.ByteTensor,
+}
 
 class LitAutoEncoder(pl.LightningModule):
     def __init__(self):
@@ -184,12 +203,14 @@ class LitAutoEncoder(pl.LightningModule):
                 images[i].view(-1, 3, 224, 224).float())
             img = np.transpose(torch.squeeze(
                 images[i]).cpu().detach().numpy(), (1, 2, 0))
-            grndLandmarks = self.landmarkDetector.get_landmarks(img*255)
-            grndLandmarks = grndLandmarks[0]
-            grndLandmarks = grndLandmarks-100/50
-            grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
-            grndLandmarks = grndLandmarks.view(-1, 68, 2)
-
+            try :
+                grndLandmarks = self.landmarkDetector.get_landmarks(img*255)
+                grndLandmarks = grndLandmarks[0]
+                grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
+                grndLandmarks = grndLandmarks.view(-1, 68, 2)
+            except Exception as e:
+                print(e)
+                continue
             trainLoss += self.loss(codedict, decodedDict, grndLandmarks)
         self.log('train_loss', trainLoss, on_epoch=True)
         return trainLoss
@@ -202,16 +223,14 @@ class LitAutoEncoder(pl.LightningModule):
                 images[i].view(-1, 3, 224, 224).float())
             img = np.transpose(torch.squeeze(
                 images[i]).cpu().detach().numpy(), (1, 2, 0))
-            # print(type(img),img.shape)
-            grndLandmarks = self.landmarkDetector.get_landmarks(img*255)
-            grndLandmarks = grndLandmarks[0]
-            grndLandmarks = grndLandmarks-100/50
-
-            grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
-            # util.show_landmarks(images[i],grndLandmarks)
-
-            grndLandmarks = grndLandmarks.view(-1, 68, 2)
-
+            try:
+                grndLandmarks = self.landmarkDetector.get_landmarks(img*255)
+                grndLandmarks = grndLandmarks[0]
+                grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
+                grndLandmarks = grndLandmarks.view(-1, 68, 2)
+            except Exception as e:
+                print(e)
+                continue
             validLoss += self.loss(codedict, decodedDict, grndLandmarks)
         self.log('valid_loss', validLoss, on_epoch=True)
 
@@ -227,8 +246,8 @@ class MyDataModule(pl.LightningDataModule):
 
     def __init__(self, batch_size: int = 4):
         super().__init__()
-        self.dataset = Dataset_3D(csv_file='/home/nandwalritik/3DFace/decalib/datasets/data.csv',
-                                  root_dir='/home/nandwalritik/3DFace/decalib/datasets/300W_LP',
+        self.dataset = Dataset_3D(csv_file='/home/nandwalritik/3d-face/decalib/datasets/data.csv',
+                                  root_dir='/home/nandwalritik/3d-face/decalib/datasets/300W_LP',
                                   transform=transforms.Compose([
                                       Preprocess()
                                   ]))
@@ -238,12 +257,67 @@ class MyDataModule(pl.LightningDataModule):
         valLen = l-int(0.3*l)
         # print(valLen)
         self.train, self.val = random_split(self.dataset, [valLen, l-valLen])
-
+    def collate_fn(self,batch):
+        '''
+        collate_fn (callable, optional): merges a list of samples to form a mini-batch.
+            This function refers to touch's default_collate function, which is also the default proofreading method of DataLoader. When the batch contains data such as None,
+            The default default_collate squad method will get an error
+            One solution is:
+            Determine whether the image in the batch is None. If it is None, it is cleared in the original batch, so that it can avoid errors in the iteration.
+        :param batch:
+        :return:
+        '''
+        r"""Puts each data field into a tensor with outer dimension batch size"""
+            # Add here: Determine whether image is None. If it is None, it will be cleared in the original batch, so you can avoid errors in iteration.
+        # print(type(batch))
+        # print(batch)
+        if isinstance(batch, list):
+            batch = [(image) for (image) in batch if image is not None]
+        if batch==[]:
+            return (None)
+    
+        elem_type = type(batch[0])
+        if isinstance(batch[0], torch.Tensor):
+            out = None
+            if _use_shared_memory:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
+        elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
+                and elem_type.__name__ != 'string_':
+            elem = batch[0]
+            if elem_type.__name__ == 'ndarray':
+                # array of string classes and object
+                if np_str_obj_array_pattern.search(elem.dtype.str) is not None:
+                    raise TypeError(error_msg_fmt.format(elem.dtype))
+    
+                return self.collate_fn([torch.from_numpy(b) for b in batch])
+            if elem.shape == ():  # scalars
+                py_type = float if elem.dtype.name.startswith('float') else int
+                return numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+        elif isinstance(batch[0], float):
+            return torch.tensor(batch, dtype=torch.float64)
+        elif isinstance(batch[0], int_classes):
+            return torch.tensor(batch)
+        elif isinstance(batch[0], string_classes):
+            return batch
+        elif isinstance(batch[0], container_abcs.Mapping):
+            return {key: self.collate_fn([d[key] for d in batch]) for key in batch[0]}
+        elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
+            return type(batch[0])(*(self.collate_fn(samples) for samples in zip(*batch)))
+        elif isinstance(batch[0], container_abcs.Sequence):
+            transposed = zip(*batch)#ok
+            return [self.collate_fn(samples) for samples in transposed]
+    
+        raise TypeError((error_msg_fmt.format(type(batch[0]))))
     def train_dataloader(self):
-        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=2)
+        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=2,collate_fn=self.collate_fn)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=2)
+        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=2,collate_fn=self.collate_fn)
 
     def test_dataloader(self):
         pass
@@ -334,10 +408,12 @@ class Dataset_3D(Dataset):
         sample = {'image': image}
 
         if self.transform:
-            sample = self.transform(sample)
-
-        return sample
-
+            try:
+                sample = self.transform(sample)
+                return sample
+            except Exception as e:
+                print(e)
+    
     def __len__(self):
         return len(self.landmarks_frame)
 
