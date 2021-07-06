@@ -3,6 +3,9 @@ from decalib.utils import util
 import torch
 import torch.nn as nn
 import numpy as np
+import face_alignment
+from scipy.spatial import ConvexHull
+from skimage import draw
 
 
 class CoarseLoss():
@@ -49,7 +52,6 @@ class CoarseLoss():
             coords of eyes
             left  = 37,38,40,41
             right = 43,44,46,47
-
         """
         flameLandmarks = torch.squeeze(flameLandmarks)
         groundtruthLandmarks = torch.squeeze(groundtruthLandmarks)
@@ -72,22 +74,37 @@ class CoarseLoss():
                    groundtruthLandmarks[46]]
         origDiff, flameDiff = 0, 0
 
-        origDiff = torch.sqrt((flameEye[2]-flameEye[0])**2 + (flameEye[3]-flameEye[1])
-                              ** 2 + (flameEye[6]-flameEye[4])**2 + (flameEye[7]-flameEye[5])**2)
-        flameDiff = torch.sqrt((grndEye[2]-grndEye[0])**2 + (grndEye[3]-grndEye[1])
-                               ** 2 + (grndEye[6]-grndEye[4])**2 + (grndEye[7]-grndEye[5])**2)
+        origDiff = torch.sqrt(((flameEye[2]-flameEye[0])**2 + (flameEye[3]-flameEye[1])
+                              ** 2)/2 + ((flameEye[6]-flameEye[4])**2 + (flameEye[7]-flameEye[5])**2)/2 )
+        flameDiff = torch.sqrt(((grndEye[2]-grndEye[0])**2 + (grndEye[3]-grndEye[1])
+                               ** 2)/2 + ((grndEye[6]-grndEye[4])**2 + (grndEye[7]-grndEye[5])**2)/2)
 
         totalDiff = torch.abs(torch.squeeze(
             torch.sum(origDiff-flameDiff))).to(device=self.device)
         return totalDiff
 
-    def photometricLoss(self, image, renderedImage, mask):
+    def photometricLoss(self, image, renderedImage, landmarks):
         """
             Computes the difference b/w input and rendered_image
             and multiplies the difference with mask value
         """
-        phLoss = torch.mul(mask, image-renderedImage).to(device=self.device)
-        return phLoss
+        landmarks = torch.squeeze(landmarks)
+        landmarks = landmarks.cpu().detach()
+        outline = landmarks[[*range(17), *range(26,16,-1)]]
+        image = np.transpose(torch.squeeze(image).cpu().detach().numpy(),(1,2,0))
+        renderedImage = np.transpose(torch.squeeze(renderedImage).cpu().detach().numpy(),(1,2,0))
+
+        vertices = ConvexHull(outline).vertices
+        Y, X = draw.polygon(outline[vertices, 1],outline[vertices, 0])
+        mask = np.zeros(image.shape)
+        mask[Y, X] = (255,255,255)
+        mask = mask/255
+        # print('-------------------------Mask-----------------------------')
+        # print(mask)
+        # print(mask.shape)
+        phLoss = torch.abs(torch.sum(torch.tensor(np.multiply(mask, image-renderedImage)))).to(device=self.device)
+        # print(phLoss)
+        return phLoss/(image.shape[0]*image.shape[1]*image.shape[2])
 
     def identityLoss(self, inputImage, renderedImage):
         """

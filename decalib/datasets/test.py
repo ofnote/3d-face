@@ -1,25 +1,25 @@
-import scipy.io
-import scipy
-from PIL import Image
-import pprint 
+import face_alignment
+from skimage import io
 import numpy as np
 import cv2
-mat = scipy.io.loadmat('./300W_LP/AFW/AFW_134212_1_0.mat')
-img = Image.open('./300W_LP/AFW/AFW_134212_1_0.jpg')
-img = np.array(img)
-fields = ['pt2d', 'roi', 'Illum_Para', 'Color_Para', 'Tex_Para', 'Shape_Para', 'Exp_Para', 'Pose_Para']
-print(img.shape)
-print(mat['pt2d'].shape)
+from scipy.spatial import ConvexHull
+from skimage import draw
+fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D,flip_input = False)
 
+inputImg = io.imread('./image02673.png')
 
+preds = fa.get_landmarks(inputImg)
+inputImg = cv2.cvtColor(inputImg,cv2.COLOR_BGR2RGB)
 
-
-
-
-# img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-# for i in range(68):
-#     # print(landmarks2d[0][i],landmarks2d[1][i])
-#     cv2.circle(img,(int(landmarks2d[0][i]),int(landmarks2d[1][i])),2,(255,0,0),2)
-
-# cv2.imshow('img',img)
-# cv2.waitKey(0)
+arr = np.array(preds[0]) 
+outline = arr[[*range(17), *range(26,16,-1)]]
+vertices = ConvexHull(outline).vertices
+Y, X = draw.polygon(outline[vertices, 1],outline[vertices, 0])
+cropped_img = np.zeros(inputImg.shape, dtype=np.uint8)
+cropped_img[Y, X] = (255,255,255)
+cropped_img = cropped_img/255
+cv2.imshow("image",cropped_img)
+cv2.imshow("orig",inputImg)
+cv2.waitKey(0)
+print(Y,X)
+print(cropped_img[Y,X])

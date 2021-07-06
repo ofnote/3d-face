@@ -86,12 +86,17 @@ def main(args):
             opdict['landmarks2d']), dictMap[name])
         print('------------------------------------Eyeloss--------------------------------------------')
         print(eyeLoss)
+
+        phLoss = loss.photometricLoss(visdict['inputs'],visdict['shape_images'],dictMap[name])
+        print('------------------------------------Photometric--------------------------------------------')
+        print(phLoss)
+
         idenLoss = loss.identityLoss(
             visdict['inputs'], visdict['shape_images'])
         print('------------------------------------Identity Loss--------------------------------------------')
         print(idenLoss)
-        util.show_comp_landmarks(torch.squeeze(
-            images), dictMap[name], opdict['landmarks2d'])
+        # util.show_comp_landmarks(torch.squeeze(
+        #     images), dictMap[name], opdict['landmarks2d'])
 
         # print('------------------------------------Printing opDict----------------------------------')
         # print(visdict.keys())

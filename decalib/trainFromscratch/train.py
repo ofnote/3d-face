@@ -160,6 +160,8 @@ class LitAutoEncoder(pl.LightningModule):
     def forward(self, images):
         codedict = self.encode(images)
         decodedDict = self.decode(codedict)
+        # print('---------------------Parameters---------------------------')
+        # print(self.parameters())
         return codedict, decodedDict
 
     def loss(self, codedict, decodedDict, landmarksOrig):
@@ -175,12 +177,8 @@ class LitAutoEncoder(pl.LightningModule):
             landmarksOrig, decodedDict['landmarks2d'])
 
         # photometric loss
-        """
-            load mask here
-        """
-        # mask = None
-        # phLoss = self.coarseLoss.photometricLoss(
-        #     decodedDict['image'], decodedDict['shape_image'], mask)
+        phLoss = self.coarseLoss.photometricLoss(
+            decodedDict['image'], decodedDict['shape_image'],landmarksOrig)
 
         #  identity loss
         idLoss = self.coarseLoss.identityLoss(
@@ -191,7 +189,7 @@ class LitAutoEncoder(pl.LightningModule):
         """
         reg = self.coarseLoss.regularization(codedict)
 
-        lossTotal = lmk+eyeLoss+idLoss+reg
+        lossTotal = lmk+eyeLoss+idLoss+phLoss+reg
         return lossTotal
 
     def training_step(self, batch, batch_idx):
