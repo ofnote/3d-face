@@ -614,6 +614,8 @@ def tensor_vis_landmarks(images, landmarks, gt_landmarks=None, color = 'g', isSc
 
 #----------------------Showing Image------------------------#
 def showImage(img,title='img'):
+    img = torch.squeeze(img)
+
     img = np.array(img.cpu())
     img = np.transpose(img,(1,2,0))
     img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)

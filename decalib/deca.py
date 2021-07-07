@@ -85,8 +85,8 @@ class DECA(object):
         self.param_dict = {i: model_cfg.get(
             'n_' + i) for i in model_cfg.param_list}
 
-        print('------------------------Printing param dict from createModel--------------------------')
-        print(self.param_dict)
+        # print('------------------------Printing param dict from createModel--------------------------')
+        # print(self.param_dict)
 
         # encoders
         self.E_flame = ResnetEncoder(outsize=self.n_param).to(self.device)

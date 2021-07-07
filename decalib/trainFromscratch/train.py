@@ -1,5 +1,6 @@
 import face_alignment
 from pytorch_lightning import loggers
+from pytorch_lightning import callbacks
 import torch
 from torch.autograd import grad
 from torch.utils.data import DataLoader, Dataset, random_split
@@ -30,11 +31,11 @@ from ..datasets import detectors
 # It is used whenever the size of the inputs is same
 torch.backends.cudnn.benchmark = True
 
-_use_shared_memory=False
+_use_shared_memory = False
 np_str_obj_array_pattern = re.compile(r'[SaUO]')
- 
+
 error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
- 
+
 numpy_type_map = {
     'float64': torch.DoubleTensor,
     'float32': torch.FloatTensor,
@@ -45,6 +46,7 @@ numpy_type_map = {
     'int8': torch.CharTensor,
     'uint8': torch.ByteTensor,
 }
+
 
 class LitAutoEncoder(pl.LightningModule):
     def __init__(self):
@@ -162,6 +164,7 @@ class LitAutoEncoder(pl.LightningModule):
         decodedDict = self.decode(codedict)
         # print('---------------------Parameters---------------------------')
         # print(self.parameters())
+
         return codedict, decodedDict
 
     def loss(self, codedict, decodedDict, landmarksOrig):
@@ -178,7 +181,7 @@ class LitAutoEncoder(pl.LightningModule):
 
         # photometric loss
         phLoss = self.coarseLoss.photometricLoss(
-            decodedDict['image'], decodedDict['shape_image'],landmarksOrig)
+            decodedDict['image'], decodedDict['shape_image'], landmarksOrig)
 
         #  identity loss
         idLoss = self.coarseLoss.identityLoss(
@@ -193,26 +196,27 @@ class LitAutoEncoder(pl.LightningModule):
         return lossTotal
 
     def training_step(self, batch, batch_idx):
-        # print(batch)
         images = batch['image']
+        # print(len(images))
+
         trainLoss = 0
         for i in range(len(images)):
             codedict, decodedDict = self.forward(
                 images[i].view(-1, 3, 224, 224).float())
             img = np.transpose(torch.squeeze(
                 images[i]).cpu().detach().numpy(), (1, 2, 0))
-            try :
+            try:
                 grndLandmarks = self.landmarkDetector.get_landmarks(img*255)
                 grndLandmarks = grndLandmarks[0]
                 grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
                 grndLandmarks = grndLandmarks.view(-1, 68, 2)
             except Exception as e:
-                print(e)
-                continue
+                pass
+                # print(e)
             trainLoss += self.loss(codedict, decodedDict, grndLandmarks)
         self.log('train_loss', trainLoss, on_epoch=True)
+        trainLoss = trainLoss/len(images)
         return trainLoss
-
     def validation_step(self, batch, batch_idx):
         images = batch['image']
         validLoss = 0
@@ -227,9 +231,11 @@ class LitAutoEncoder(pl.LightningModule):
                 grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
                 grndLandmarks = grndLandmarks.view(-1, 68, 2)
             except Exception as e:
-                print(e)
-                continue
+                # print(e)
+                pass
+                # continue
             validLoss += self.loss(codedict, decodedDict, grndLandmarks)
+        validLoss=validLoss/len(images)
         self.log('valid_loss', validLoss, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
@@ -255,7 +261,8 @@ class MyDataModule(pl.LightningDataModule):
         valLen = l-int(0.3*l)
         # print(valLen)
         self.train, self.val = random_split(self.dataset, [valLen, l-valLen])
-    def collate_fn(self,batch):
+
+    def collate_fn(self, batch):
         '''
         collate_fn (callable, optional): merges a list of samples to form a mini-batch.
             This function refers to touch's default_collate function, which is also the default proofreading method of DataLoader. When the batch contains data such as None,
@@ -266,14 +273,14 @@ class MyDataModule(pl.LightningDataModule):
         :return:
         '''
         r"""Puts each data field into a tensor with outer dimension batch size"""
-            # Add here: Determine whether image is None. If it is None, it will be cleared in the original batch, so you can avoid errors in iteration.
+        # Add here: Determine whether image is None. If it is None, it will be cleared in the original batch, so you can avoid errors in iteration.
         # print(type(batch))
         # print(batch)
         if isinstance(batch, list):
             batch = [(image) for (image) in batch if image is not None]
-        if batch==[]:
+        if batch == []:
             return (None)
-    
+
         elem_type = type(batch[0])
         if isinstance(batch[0], torch.Tensor):
             out = None
@@ -291,7 +298,7 @@ class MyDataModule(pl.LightningDataModule):
                 # array of string classes and object
                 if np_str_obj_array_pattern.search(elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
-    
+
                 return self.collate_fn([torch.from_numpy(b) for b in batch])
             if elem.shape == ():  # scalars
                 py_type = float if elem.dtype.name.startswith('float') else int
@@ -307,18 +314,20 @@ class MyDataModule(pl.LightningDataModule):
         elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
             return type(batch[0])(*(self.collate_fn(samples) for samples in zip(*batch)))
         elif isinstance(batch[0], container_abcs.Sequence):
-            transposed = zip(*batch)#ok
+            transposed = zip(*batch)  # ok
             return [self.collate_fn(samples) for samples in transposed]
-    
+
         raise TypeError((error_msg_fmt.format(type(batch[0]))))
+
     def train_dataloader(self):
-        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=2,collate_fn=self.collate_fn)
+        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=2, collate_fn=self.collate_fn)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=2,collate_fn=self.collate_fn)
+        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=2, collate_fn=self.collate_fn)
 
     def test_dataloader(self):
         pass
+
 
 class Preprocess(object):
     def __init__(self, iscrop=True, crop_size=224, scale=1.25, face_detector='fan'):
@@ -410,8 +419,10 @@ class Dataset_3D(Dataset):
                 sample = self.transform(sample)
                 return sample
             except Exception as e:
-                print(e)
-    
+                pass
+
+                # print(e)
+
     def __len__(self):
         return len(self.landmarks_frame)
 
@@ -423,14 +434,14 @@ if __name__ == "__main__":
     dm = MyDataModule()
     checkpoint_callback = ModelCheckpoint(
         monitor='valid_loss',
-        dirpath='home/nandwalritik/3DFace/decalib/savedModel/',
-        filename='sample-mnist-{epoch:02d}-{valid_loss:.2f}',
+        dirpath='savedModel/',
+        filename='decaCoarse-{epoch:02d}-{valid_loss:.2f}',
         save_top_k=3,
         mode='min',
     )
     wandb_logger = WandbLogger()
     wandb.init()
-    trainer = pl.Trainer(gpus=1,logger=wandb_logger)
+    trainer = pl.Trainer(gpus=1, logger=wandb_logger,callbacks=[checkpoint_callback])
     trainer.fit(model, dm)
 
     # face_dataset = Dataset_3D(csv_file='/home/nandwalritik/3DFace/decalib/datasets/data.csv',

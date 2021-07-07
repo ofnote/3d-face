@@ -94,7 +94,7 @@ class TestData(Dataset):
         imagepath = self.imagepath_list[index]
         imagename = imagepath.split('/')[-1].split('.')[0]
 
-        image = np.array(imread("decalib/datasets/300W_LP"+'/'+imagepath))
+        image = np.array(imread(imagepath))
         if len(image.shape) == 2:
             image = image[:, :, None].repeat(1, 1, 3)
         if len(image.shape) == 3 and image.shape[2] > 3:

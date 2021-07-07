@@ -19,15 +19,15 @@ class CoarseLoss():
             And corresponding landmarks in FLAME's surface projected by
             estimated camera model
         """
-        origLandmarks=torch.squeeze(origLandmarks)
-        predictedLandmarks=torch.squeeze(predictedLandmarks)
+        origLandmarks = torch.squeeze(origLandmarks)
+        predictedLandmarks = torch.squeeze(predictedLandmarks)
         loss = origLandmarks-predictedLandmarks
         # print('-----------------After taking difference----------------------')
         # print(loss)
         loss = torch.square(loss)
         # print('---------------After squaring------------------')
         # print(loss)
-        loss = torch.sum(loss,dim=1)
+        loss = torch.sum(loss, dim=1)
         # print('---------------After Summing------------------')
         # print(loss)
         loss = torch.sqrt(loss)
@@ -75,7 +75,7 @@ class CoarseLoss():
         origDiff, flameDiff = 0, 0
 
         origDiff = torch.sqrt(((flameEye[2]-flameEye[0])**2 + (flameEye[3]-flameEye[1])
-                              ** 2)/2 + ((flameEye[6]-flameEye[4])**2 + (flameEye[7]-flameEye[5])**2)/2 )
+                              ** 2)/2 + ((flameEye[6]-flameEye[4])**2 + (flameEye[7]-flameEye[5])**2)/2)
         flameDiff = torch.sqrt(((grndEye[2]-grndEye[0])**2 + (grndEye[3]-grndEye[1])
                                ** 2)/2 + ((grndEye[6]-grndEye[4])**2 + (grndEye[7]-grndEye[5])**2)/2)
 
@@ -90,19 +90,22 @@ class CoarseLoss():
         """
         landmarks = torch.squeeze(landmarks)
         landmarks = landmarks.cpu().detach()
-        outline = landmarks[[*range(17), *range(26,16,-1)]]
-        image = np.transpose(torch.squeeze(image).cpu().detach().numpy(),(1,2,0))
-        renderedImage = np.transpose(torch.squeeze(renderedImage).cpu().detach().numpy(),(1,2,0))
+        outline = landmarks[[*range(17), *range(26, 16, -1)]]
+        image = np.transpose(torch.squeeze(
+            image).cpu().detach().numpy(), (1, 2, 0))
+        renderedImage = np.transpose(torch.squeeze(
+            renderedImage).cpu().detach().numpy(), (1, 2, 0))
 
         vertices = ConvexHull(outline).vertices
-        Y, X = draw.polygon(outline[vertices, 1],outline[vertices, 0])
+        Y, X = draw.polygon(outline[vertices, 1], outline[vertices, 0])
         mask = np.zeros(image.shape)
-        mask[Y, X] = (255,255,255)
+        mask[Y, X] = (255, 255, 255)
         mask = mask/255
         # print('-------------------------Mask-----------------------------')
         # print(mask)
         # print(mask.shape)
-        phLoss = torch.abs(torch.sum(torch.tensor(np.multiply(mask, image-renderedImage)))).to(device=self.device)
+        phLoss = torch.abs(torch.sum(torch.tensor(np.multiply(
+            mask, image-renderedImage)))).to(device=self.device)
         # print(phLoss)
         return phLoss/(image.shape[0]*image.shape[1]*image.shape[2])
 

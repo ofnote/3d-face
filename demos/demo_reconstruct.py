@@ -1,6 +1,3 @@
-from decalib.datasets.detectors import MTCNN
-from numpy.matrixlib.defmatrix import matrix
-from skimage import transform
 from decalib.datasets import datasets
 from decalib.trainFromscratch.Loss import CoarseLoss
 from decalib.utils.config import cfg as deca_cfg
@@ -13,15 +10,10 @@ import numpy as np
 from time import time
 from scipy.io import savemat
 import argparse
-from torch.nn.functional import interpolate
 from tqdm import tqdm
 import pandas as pd
 import torch
 import face_alignment
-from skimage.transform import matrix_transform, warp
-from skimage import io
-from facenet_pytorch import MTCNN as mtcnn
-from PIL import Image
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..')))
 
@@ -87,7 +79,8 @@ def main(args):
         print('------------------------------------Eyeloss--------------------------------------------')
         print(eyeLoss)
 
-        phLoss = loss.photometricLoss(visdict['inputs'],visdict['shape_images'],dictMap[name])
+        phLoss = loss.photometricLoss(
+            visdict['inputs'], visdict['shape_images'], dictMap[name])
         print('------------------------------------Photometric--------------------------------------------')
         print(phLoss)
 
