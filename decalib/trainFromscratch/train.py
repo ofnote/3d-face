@@ -211,8 +211,8 @@ class LitAutoEncoder(pl.LightningModule):
                 grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
                 grndLandmarks = grndLandmarks.view(-1, 68, 2)
             except Exception as e:
-                pass
-                # print(e)
+                print(e)
+                continue
             trainLoss += self.loss(codedict, decodedDict, grndLandmarks)
         self.log('train_loss', trainLoss, on_epoch=True)
         trainLoss = trainLoss/len(images)
@@ -231,9 +231,8 @@ class LitAutoEncoder(pl.LightningModule):
                 grndLandmarks = torch.tensor(grndLandmarks).to(device='cuda')
                 grndLandmarks = grndLandmarks.view(-1, 68, 2)
             except Exception as e:
-                # print(e)
-                pass
-                # continue
+                print(e)
+                continue
             validLoss += self.loss(codedict, decodedDict, grndLandmarks)
         validLoss=validLoss/len(images)
         self.log('valid_loss', validLoss, on_epoch=True)
@@ -250,8 +249,8 @@ class MyDataModule(pl.LightningDataModule):
 
     def __init__(self, batch_size: int = 4):
         super().__init__()
-        self.dataset = Dataset_3D(csv_file='/home/nandwalritik/3d-face/decalib/datasets/data.csv',
-                                  root_dir='/home/nandwalritik/3d-face/decalib/datasets/300W_LP',
+        self.dataset = Dataset_3D(csv_file=os.getcwd()+'/3d-face/decalib/datasets/data.csv',
+                                  root_dir=os.getcwd()+'/3d-face/decalib/datasets/300W_LP',
                                   transform=transforms.Compose([
                                       Preprocess()
                                   ]))
@@ -419,10 +418,7 @@ class Dataset_3D(Dataset):
                 sample = self.transform(sample)
                 return sample
             except Exception as e:
-                pass
-
-                # print(e)
-
+                print(e)
     def __len__(self):
         return len(self.landmarks_frame)
 
