@@ -19,7 +19,7 @@ def main(args):
         args.inputpath, iscrop=args.iscrop, face_detector=args.detector)
 
     decaCoarse = DecaCoarse(
-        path='savedModel/decaCoarse-epoch=04-valid_loss=254.23.ckpt', config=deca_cfg, device=device)
+        path='savedModel/decaCoarse_epoch=25.ckpt', config=deca_cfg, device=device)
 
     for i in tqdm(range(len(testdata))):
         name = testdata[i]['imagename']
@@ -27,6 +27,8 @@ def main(args):
 
         codedict = decaCoarse.encode(images)
         decodedict = decaCoarse.decode(codedict)
+        # print(decodedict)
+        util.show_landmarks(torch.squeeze(codedict["images"]),torch.squeeze(decodedict['landmarks2d']))
         util.showImage(decodedict['shape_image'])
     #     if args.saveDepth or args.saveKpt or args.saveObj or args.saveMat or args.saveImages:
     #         os.makedirs(os.path.join(savefolder, name), exist_ok=True)

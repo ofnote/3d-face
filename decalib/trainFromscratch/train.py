@@ -2,6 +2,7 @@ import face_alignment
 from pytorch_lightning import loggers
 from pytorch_lightning import callbacks
 import torch
+from torch._C import device
 from torch.autograd import grad
 from torch.utils.data import DataLoader, Dataset, random_split
 from .Loss import CoarseLoss
@@ -65,7 +66,6 @@ class LitAutoEncoder(pl.LightningModule):
         # self.test_acc = pl.metrics.Accuracy()
         self.landmarkDetector = face_alignment.FaceAlignment(
             face_alignment.LandmarksType._2D, face_detector='sfd', device='cpu')
-
         # initializing encoder and decoder
         self._create_model(self.cfg.model)
         self._setup_renderer(self.cfg.model)
@@ -80,6 +80,7 @@ class LitAutoEncoder(pl.LightningModule):
 
         # encoders
         self.E_flame = ResnetEncoder(outsize=self.n_param).to(self.device)
+        self.initialParams = list(self.E_flame.parameters())[0].clone()
 
         # decoder
         self.flame = FLAME(model_cfg).to(self.device)
@@ -164,6 +165,9 @@ class LitAutoEncoder(pl.LightningModule):
         decodedDict = self.decode(codedict)
         # print('---------------------Parameters---------------------------')
         # print(self.parameters())
+        # print(self._current_dataloader_idx)
+        # util.show_landmarks(torch.squeeze(codedict["images"]),torch.squeeze(decodedDict['landmarks2d']))
+        # util.showImage(decodedDict['shape_image'])
 
         return codedict, decodedDict
 
@@ -198,7 +202,7 @@ class LitAutoEncoder(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         images = batch['image']
         # print(len(images))
-
+        self.E_flame.train()
         trainLoss = 0
         for i in range(len(images)):
             codedict, decodedDict = self.forward(
@@ -214,11 +218,13 @@ class LitAutoEncoder(pl.LightningModule):
                 print(e)
                 continue
             trainLoss += self.loss(codedict, decodedDict, grndLandmarks)
+        # trainLoss = trainLoss/len(images)
         self.log('train_loss', trainLoss, on_epoch=True)
-        trainLoss = trainLoss/len(images)
         return trainLoss
+
     def validation_step(self, batch, batch_idx):
         images = batch['image']
+        self.E_flame.eval()
         validLoss = 0
         for i in range(len(images)):
             codedict, decodedDict = self.forward(
@@ -234,7 +240,8 @@ class LitAutoEncoder(pl.LightningModule):
                 print(e)
                 continue
             validLoss += self.loss(codedict, decodedDict, grndLandmarks)
-        validLoss=validLoss/len(images)
+        # validLoss = validLoss/len(images)
+        self.E_flame.train()
         self.log('valid_loss', validLoss, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
@@ -242,15 +249,21 @@ class LitAutoEncoder(pl.LightningModule):
 
     def configure_optimizers(self):
         # print(self.parameters)
-        return optim.Adam(self.parameters(), lr=1e-4)
+        return optim.Adam(self.E_flame.parameters(), lr=1e-4, amsgrad=False)
+
+    # def optimizer_step(self, *args, **kwargs):
+    #     old_state = list(self.parameters())[0].clone()
+    #     super().optimizer_step(*args, **kwargs)
+    #     new_state = list(self.parameters())[0].clone()
+    #     print(torch.equal(old_state.data, new_state.data))
 
 
 class MyDataModule(pl.LightningDataModule):
 
     def __init__(self, batch_size: int = 4):
         super().__init__()
-        self.dataset = Dataset_3D(csv_file=os.getcwd()+'/3d-face/decalib/datasets/data.csv',
-                                  root_dir=os.getcwd()+'/3d-face/decalib/datasets/300W_LP',
+        self.dataset = Dataset_3D(csv_file=os.getcwd()+'/decalib/datasets/data.csv',
+                                  root_dir=os.getcwd()+'/decalib/datasets/300W_LP',
                                   transform=transforms.Compose([
                                       Preprocess()
                                   ]))
@@ -319,10 +332,10 @@ class MyDataModule(pl.LightningDataModule):
         raise TypeError((error_msg_fmt.format(type(batch[0]))))
 
     def train_dataloader(self):
-        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=2, collate_fn=self.collate_fn)
+        return DataLoader(dataset=self.train, batch_size=self.batch_size, num_workers=1, collate_fn=self.collate_fn)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=2, collate_fn=self.collate_fn)
+        return DataLoader(dataset=self.val, batch_size=self.batch_size, num_workers=1, collate_fn=self.collate_fn)
 
     def test_dataloader(self):
         pass
@@ -419,6 +432,7 @@ class Dataset_3D(Dataset):
                 return sample
             except Exception as e:
                 print(e)
+
     def __len__(self):
         return len(self.landmarks_frame)
 
@@ -431,26 +445,32 @@ if __name__ == "__main__":
     checkpoint_callback = ModelCheckpoint(
         monitor='valid_loss',
         dirpath='savedModel/',
-        filename='decaCoarse-{epoch:02d}-{valid_loss:.2f}',
+        filename='decaCoarse_{epoch}',
         save_top_k=3,
         mode='min',
     )
     wandb_logger = WandbLogger()
     wandb.init()
-    trainer = pl.Trainer(gpus=1, logger=wandb_logger,callbacks=[checkpoint_callback])
+
+    """Uncomment and specify checkpoint when you want to reuse previously trained model"""
+    # trainer = pl.Trainer(gpus=1, logger=wandb_logger,
+    #                      resume_from_checkpoint="/home/nandwalritik/3d-face/savedModel/decaCoarse_epoch=2.ckpt  ", callbacks=[checkpoint_callback])
+
+    """Train from scratch"""
+    trainer = pl.Trainer(gpus=1, logger=wandb_logger,
+                         callbacks=[checkpoint_callback])
+
     trainer.fit(model, dm)
 
-    # face_dataset = Dataset_3D(csv_file='/home/nandwalritik/3DFace/decalib/datasets/data.csv',
-    #                           root_dir='/home/nandwalritik/3DFace/decalib/datasets/300W_LP',
+    # face_dataset = Dataset_3D(csv_file='/home/nandwalritik/3d-face/decalib/datasets/data.csv',
+    #                           root_dir='/home/nandwalritik/3d-face/decalib/datasets/300W_LP',
     #                           transform=transforms.Compose([
-    #                               Rescale(224),
-    #                               Normalize(),
-    #                               ToTensor()
+    #                             Preprocess()
     #                           ]))
 
     # for i in range(len(face_dataset)):
     #     if i == 10:
     #         break
     #     sample = face_dataset[i]
-    #     print(i, sample['image'].size(), sample['landmarks'].size())
-    #     util.show_landmarks(sample['image'], sample['landmarks'])
+    #     print(i, sample['image'].size())
+    #     util.showImage(sample['image'])

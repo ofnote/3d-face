@@ -469,6 +469,26 @@ def copy_state_dict(cur_state_dict, pre_state_dict, prefix='', load_name=None):
         except:
             # print('copy param {} failed'.format(k))
             continue
+#------------------------copy state dict pl--------------------------------------------#
+def copy_state_dict_PL(cur_state_dict,pre_state_dict,prefix='',load_name=None):
+    def _get_params(key):
+        key = prefix+"."+key
+        # print(key)
+        if key in pre_state_dict.keys():
+            # print(f'-----Searching For {key} found')
+            return pre_state_dict[key]
+        return None
+    for k in cur_state_dict.keys():
+        if load_name is not None:
+            if load_name not in k:
+                continue
+        v = _get_params(k)
+        try:
+            if v is None:
+                continue
+            cur_state_dict[k].copy_(v)
+        except:
+            continue
 
 def check_mkdir(path):
     if not os.path.exists(path):

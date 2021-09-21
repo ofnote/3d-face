@@ -12,9 +12,9 @@ from tqdm import tqdm
 import csv
 import cv2
 
-dataPath = os.getcwd()+'/3d-face/decalib/datasets'+"/300W_LP"
-dirs = ['IBUG','AFW', 'AFW_Flip', 'HELEN', 'HELEN_Flip', 'IBUG_Flip', 'LFPW', 'LFPW_Flip']
-# dirs = ['IBUG']
+dataPath = os.getcwd()+'/decalib/datasets'+"/300W_LP"
+# dirs = ['IBUG','AFW', 'AFW_Flip', 'HELEN', 'HELEN_Flip', 'IBUG_Flip', 'LFPW', 'LFPW_Flip']
+dirs = ['IBUG']
 
 files = []
 # fields = ['pt2d', 'roi', 'Illum_Para', 'Color_Para',

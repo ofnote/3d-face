@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn.functional as F
 from decalib.trainFromscratch.train import LitAutoEncoder
@@ -7,6 +6,8 @@ from .utils.renderer import SRenderY
 from .utils import util
 import cv2
 from skimage.io import imread
+from .models.FLAME import FLAME
+from .models.encoders import ResnetEncoder
 import numpy as np
 
 
@@ -17,7 +18,9 @@ class DecaCoarse():
             self.cfg = cfg
         else:
             self.cfg = config
-        self.ckpt = LitAutoEncoder.load_from_checkpoint(path)
+        self.ckpt = torch.load(path)['state_dict']
+        # model_path = self.cfg.pretrained_modelpath
+        # self.ckpt = torch.load(model_path)
         self.device = device
         self.image_size = self.cfg.dataset.image_size
         self._create_model(self.cfg.model)
@@ -33,9 +36,16 @@ class DecaCoarse():
             'n_' + i) for i in model_cfg.param_list}
 
         # encoders
-        self.E_flame = self.ckpt.E_flame.to(device=self.device)
-        self.flame = self.ckpt.flame.to(device=self.device)
+        self.E_flame = ResnetEncoder(outsize=self.n_param).to(device=self.device)
+        self.flame = FLAME(model_cfg).to(device=self.device)
 
+        util.copy_state_dict_PL(self.E_flame.state_dict(),self.ckpt,prefix='E_flame')
+        # util.copy_state_dict(self.E_flame.state_dict(),self.ckpt['E_flame'])
+        # util.copy_state_dict_PL(self.)
+
+        # eval mode
+        # self.E_flame.eval()
+    
     def _setup_renderer(self, model_cfg):
         self.render = SRenderY(self.image_size, obj_filename=model_cfg.topology_path,
                                uv_size=model_cfg.uv_size).to(self.device)
@@ -81,6 +91,7 @@ class DecaCoarse():
         codedict = self.decompose_code(parameters, self.param_dict)
         codedict['images'] = images
         return codedict
+
     @torch.no_grad()
     def decode(self, codedict):
         vertices, landmarks2d, landmarks3d = self.flame(

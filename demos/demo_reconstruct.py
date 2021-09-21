@@ -25,10 +25,10 @@ def main(args):
     loss = CoarseLoss()
     fa = face_alignment.FaceAlignment(
         face_alignment.LandmarksType._2D, face_detector='sfd', device='cuda')
-    dataFile = pd.read_csv(
-        '/home/nandwalritik/3DFace/decalib/datasets/data.csv')
-    # load test images
-    args.inputpath = list(dataFile.loc[:, 'image_name'].values)
+    # dataFile = pd.read_csv(
+    #     '/home/nandwalritik/3DFace/decalib/datasets/data.csv')
+    # # load test images
+    # args.inputpath = list(dataFile.loc[:, 'image_name'].values)
     dictMap = {}
     # for i in range(len(dataFile)):
     #     inputImg = io.imread("/home/nandwalritik/3DFace/decalib/datasets/300W_LP" + '/'+dataFile.iloc[i]['image_name'])
